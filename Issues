@@ -1,0 +1,43 @@
+Issues
+
+ - No ratelimiter on your side that prevents us from 429 (to may requests)
+    - Ratelimit is per retailer/ shopify store
+    - A ratelimiter that works in cluster mode
+    - 1, 2% of the requests thats needs a retry can be queueued
+
+ - Processing updates from shopify with no intelligence. Cut of processing if you have already seen the same message id earlier
+ - No caching
+ - Shopify backend runs in cluster mode
+
+
+explore messageing dedup
+filter params
+
+ Proposal
+ - Cluster aware rate limiter (bottleneck npm)
+    - rate limit across child processes
+    - address the issue with ratelimit / retailer
+    - bottleneck is actively developed ~150k downloads
+
+ - Queue the incoming request
+ - Process at a reliable pace that is governed by a ratelimit per store
+ - Discard processing duplicate messages from shopify
+ - Cache static (or static over a period) data.
+    - Subscribe to shopify webhooks (This requires app reinstallation???)
+
+
+
+ Limitations with bottleneck
+ - Need to explore how to persist bottleneck jobs (beequeue). 
+    Using a queue for incoming requests will solve this
+
+ Outcome
+ - cache , reinstall, queue, sweep
+ - check at atlas for not publishing everytime
+ - sweep call on orders - previous id - last since id for webhook
+ - webhook for product
+
+ priority
+ - webhook prodcut -> yugabyte
+ - sweep for orders, products
+ count api

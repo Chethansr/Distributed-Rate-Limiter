@@ -1,0 +1,94 @@
+//const cluster = require('cluster');
+//const http = require('http');
+//const numCPUs = require('os').cpus().length;
+const Bottleneck = require("bottleneck/es5");
+const Shopify = require('shopify-api-node');
+
+const shopify = new Shopify({
+  shopName: 'csnarvar.myshopify.com',
+  accessToken: 'd07a46f0fdc546f9ecfeca4fc3706c5f',
+  //autoLimit: { calls: 2, interval: 3000, bucketSize: 40 }
+});
+
+const limiter = new Bottleneck({
+  reservoir: 40,
+  reservoirIncreaseAmount: 2,
+  reservoirIncreaseInterval: 1000,
+  reservoirIncreaseMaximum: 40,
+  maxConcurrent: 5,
+  minTime: 250,
+  id: "shopify-test-rate-limit",
+
+  datastore: "redis",
+  clearDatastore: false,
+  clientOptions: {
+    host: "127.0.0.1",
+    port: 6379
+  }
+});
+
+function getShopifyProductInfo() {
+  console.log("getShopifyProductInfo");
+  return shopify.productImage.list('1864856240179');
+  /* .then(product => {
+     console.log(++successCnt);
+     JSON.stringify(product);
+   })
+   .catch(err => {
+     console.error(err);
+     //throw new Error(err);
+   });*/
+}
+
+// Listen to the "failed" event
+limiter.on("failed", async(error, jobInfo) => {
+  const id = jobInfo.options.id;
+  console.warn(`Job ${id} failed: ${error}`);
+
+  if (jobInfo.retryCount === 0) { // Here we only retry once
+    console.log(`Retrying job ${id} in 25ms!`);
+    return 25;
+  }
+});
+
+// Listen to the "retry" event
+limiter.on("retry", (error, jobInfo) => {
+  console.log(`Now retrying ${jobInfo.options.id}`)
+});
+
+
+var successCnt = 0;
+
+var main = async function() {
+  const wrapped = limiter.wrap(getShopifyProductInfo);
+  //toggle comment for the next 2 lines to recreate the issue of rate limit
+  const result = await wrapped();
+  //const result = await getShopifyProductInfo();
+  result
+    .then(result => {
+      console.log(result + "\n");
+    })
+    .catch(console.log)
+}
+
+
+
+
+
+/*if (cluster.isMaster) {
+  console.log(`Master ${process.pid} is running`);
+  for (let i = 0; i < 2; i++) {
+    cluster.fork();
+  }
+  cluster.on('exit', (worker, code, signal) => {
+    console.log(`worker ${worker.process.pid} died`);
+  });
+} else {
+  http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end(main);
+  }).listen(9898);
+  console.log(`Worker ${process.pid} started`);
+}*/
+
+main();
